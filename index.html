@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Currently Playing</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1db954, #191414);
+            color: white;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            text-align: center;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+        }
+        h1 {
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            background: linear-gradient(45deg, #1db954, #1ed760);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .login-btn {
+            background: #1db954;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            margin: 20px 0;
+        }
+        .login-btn:hover {
+            background: #1ed760;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(29, 185, 84, 0.4);
+        }
+        .track-info {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            border-left: 4px solid #1db954;
+        }
+        .track-name {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .track-artist {
+            font-size: 1.2em;
+            color: #b3b3b3;
+        }
+        .no-track {
+            color: #b3b3b3;
+            font-style: italic;
+        }
+        .logout-btn {
+            background: #e22134;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 14px;
+            border-radius: 25px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.3s ease;
+        }
+        .logout-btn:hover {
+            background: #c41e3a;
+            transform: translateY(-1px);
+        }
+        .loading {
+            color: #1db954;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 Spotify Player</h1>
+        
+        <div id="loginSection">
+            <p>Connect your Spotify account to see what you're currently playing!</p>
+            <button id="loginBtn" class="login-btn">🎵 Login with Spotify</button>
+        </div>
+        
+        <div id="playerSection" style="display: none;">
+            <p>Welcome! Here's what you're listening to:</p>
+            <button id="refreshBtn" class="login-btn">🔄 Refresh Now Playing</button>
+            <div id="trackInfo" class="track-info">
+                <div class="loading">Loading...</div>
+            </div>
+            <button id="logoutBtn" class="logout-btn">Logout</button>
+        </div>
+    </div>
+
+    <script>
+        const CLIENT_ID = '7098f9afd3614ae088dd4233bb7a8d3b';
+        const REDIRECT_URI = 'http://127.0.0.1:3000/callback';
+        const SCOPE = 'user-read-currently-playing';
+        
+        const loginSection = document.getElementById('loginSection');
+        const playerSection = document.getElementById('playerSection');
+        const loginBtn = document.getElementById('loginBtn');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const trackInfo = document.getElementById('trackInfo');
+
+        // Check if user is already logged in
+        function checkAuth() {
+            // Check URL parameters for authentication result
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+            const success = urlParams.get('success');
+            const error = urlParams.get('error');
+
+            if (token && success) {
+                // Store token and clean URL
+                localStorage.setItem('spotify_access_token', token);
+                window.history.replaceState({}, document.title, '/');
+                showPlayerSection();
+                getCurrentlyPlaying();
+                return;
+            }
+
+            if (error) {
+                // Show error message
+                alert(`Authentication error: ${error}`);
+                window.history.replaceState({}, document.title, '/');
+            }
+
+            // Check existing token
+            const existingToken = localStorage.getItem('spotify_access_token');
+            if (existingToken) {
+                showPlayerSection();
+                getCurrentlyPlaying();
+            } else {
+                showLoginSection();
+            }
+        }
+
+        function showLoginSection() {
+            loginSection.style.display = 'block';
+            playerSection.style.display = 'none';
+        }
+
+        function showPlayerSection() {
+            loginSection.style.display = 'none';
+            playerSection.style.display = 'block';
+        }
+
+        // Spotify OAuth login
+        function loginWithSpotify() {
+            const authUrl = `https://accounts.spotify.com/authorize?` +
+                `client_id=${CLIENT_ID}&` +
+                `response_type=code&` +
+                `redirect_uri=${encodeURIComponent(REDIRECT_URI)}&` +
+                `scope=${encodeURIComponent(SCOPE)}`;
+            
+            window.location.href = authUrl;
+        }
+
+        // Get currently playing track
+        async function getCurrentlyPlaying() {
+            const token = localStorage.getItem('spotify_access_token');
+            if (!token) {
+                showLoginSection();
+                return;
+            }
+
+            trackInfo.innerHTML = '<div class="loading">Loading...</div>';
+
+            try {
+                const response = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.status === 401) {
+                    // Token expired
+                    localStorage.removeItem('spotify_access_token');
+                    showLoginSection();
+                    return;
+                }
+
+                if (response.status === 204 || !response.ok) {
+                    trackInfo.innerHTML = '<div class="no-track">No track currently playing</div>';
+                    return;
+                }
+
+                const data = await response.json();
+                
+                if (data.item) {
+                    const trackName = data.item.name;
+                    const artists = data.item.artists.map(artist => artist.name).join(', ');
+                    
+                    trackInfo.innerHTML = `
+                        <div class="track-name">${trackName}</div>
+                        <div class="track-artist">by ${artists}</div>
+                    `;
+                } else {
+                    trackInfo.innerHTML = '<div class="no-track">No track currently playing</div>';
+                }
+            } catch (error) {
+                console.error('Error fetching currently playing:', error);
+                trackInfo.innerHTML = '<div class="no-track">Error loading track information</div>';
+            }
+        }
+
+        // Logout function
+        function logout() {
+            localStorage.removeItem('spotify_access_token');
+            showLoginSection();
+        }
+
+        // Event listeners
+        loginBtn.addEventListener('click', loginWithSpotify);
+        refreshBtn.addEventListener('click', getCurrentlyPlaying);
+        logoutBtn.addEventListener('click', logout);
+
+        // Initialize the app
+        checkAuth();
+    </script>
+</body>
+</html> 
