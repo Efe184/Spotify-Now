@@ -1,13 +1,16 @@
 {
-  "functions": {
-    "index.js": {
-      "runtime": "@vercel/node@3"
-    }
-  },
   "rewrites": [
     {
-      "source": "/(.*)",
-      "destination": "/index.js"
+      "source": "/",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/callback",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/now-playing.svg",
+      "destination": "/api/index"
     }
   ]
 } 
